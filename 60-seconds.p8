@@ -30,7 +30,7 @@ map_colliders={}
 map_colliders.__index=function() return {0,0,8,8} end
 setmetatable(map_colliders,map_colliders)
 
-debug_colliders={}
+debug_colliders=nil
 
 -- particles
 test_ppal={7,9,10}
@@ -134,8 +134,6 @@ function draw_player(p)
 
 	spr(player_anim[idx],x,y,1,1,p.flip)
 
-	print(lessa,0,0,8)
-
 	if debug_colliders!=nil then
 		draw_collider(p,8)
 
@@ -145,8 +143,6 @@ function draw_player(p)
 		debug_colliders={}
 	end
 end
-
-lessa=""
 
 function update_player(p)
 	if p.death_anim>0 then
@@ -188,11 +184,6 @@ function update_player(p)
 		next_map_timer=next_map_time
 	else
 		respond_collision(p,dx,dy)
-
-		lessa=dx..","..dy..","
-		if p.grounded then
-			lessa=lessa.."ground"
-		end
 	end
 end
 
@@ -243,9 +234,6 @@ function check_collision_raw(a,b)
 		return false,0,0
 	end
 
-	local dvx=b.vx-a.vx
-	local dvy=b.vy-a.vy
-
 	local ax0=a.x+a.ox
 	local ax1=ax0+a.w
 	local ay0=a.y+a.oy
@@ -290,7 +278,7 @@ function respond_collision(a,dx,dy)
 	if dy!=0 and sdy!=sgn(a.vy) then
 		a.vy=0
 
-		if sdy<0 and dx==0 then
+		if sdy<0 then
 			a.grounded=true
 		end
 	end
@@ -331,8 +319,8 @@ function map_check_collision(c,sx,sy)
 		if band(f,f_solid)!=0x0 then
 			local cr,dx,dy=check_collision_raw(c,t,sx,sy)
 			if cr then
-				r.m=bor(r.m,mm)
 				r.f=bor(r.f,f)
+				r.m=bor(r.m,mm)
 
 				add(r.c,{x=dx,y=dy})
 
@@ -363,48 +351,49 @@ function map_check_collision(c,sx,sy)
 	local dx=0
 	local dy=0
 
+	local function t(v,d)
+		return abs(v/d)
+	end
+
 	if #r.c<3 and r.m!=d1 and r.m!=d2 then
-		local sx=0
-		local sy=0
-
-		for c in all(r.c) do
-			if sx==0 then
-				sx=c.x
-			elseif fsgn(c.x)!=sgn(sx) then
-				c.x=0
-			else
-				sx=max_abs(sx,c.x)
+		if #r.c==2 then
+			for rc in all(r.c) do
+				dx=max_abs(dx,rc.x)
+				dy=max_abs(dy,rc.y)
 			end
 
-			if sy==0 then
-				sy=c.y
-			elseif fsgn(c.y)!=sgn(sy) then
-				c.y=0
-			else
-				sy=max_abs(sy,c.y)
+			for rc in all(r.c) do
+				if rc.x!=0 and sgn(rc.x)!=sgn(dx) then
+					dx=0
+					break
+				end
+				if rc.y!=0 and sgn(rc.y)!=sgn(dy) then
+					dy=0
+					break
+				end
 			end
-		end
+		elseif #r.c==1 then
+			for rc in all(r.c) do
+				if t(c.vx,rc.x)>t(c.vy,rc.y) then
+					rc.y=0
+				else
+					rc.x=0
+				end
 
-		for c in all(r.c) do
-			dx=max_abs(dx,c.x)
-			dy=max_abs(dy,c.y)
-		end
-
-		if abs(dy)<abs(dx) then
-			dx=0
-		else
-			dy=0
+				dx=max_abs(dx,rc.x)
+				dy=max_abs(dy,rc.y)
+			end
 		end
 	else
-		for c in all(r.c) do
-			if abs(c.y)<abs(c.x) then
-				c.x=0
+		for rc in all(r.c) do
+			if t(c.vx,rc.x)>t(c.vy,rc.y) then
+				rc.y=0
 			else
-				c.y=0
+				rc.x=0
 			end
 
-			dx=max_abs(dx,c.x)
-			dy=max_abs(dy,c.y)
+			dx=max_abs(dx,rc.x)
+			dy=max_abs(dy,rc.y)
 		end
 	end
 
