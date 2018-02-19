@@ -30,6 +30,8 @@ map_colliders={}
 map_colliders.__index=function() return {0,0,8,8} end
 setmetatable(map_colliders,map_colliders)
 
+debug_colliders={}
+
 -- particles
 test_ppal={7,9,10}
 
@@ -100,10 +102,18 @@ end
 ---------------- player
 
 function reset_player(p,l)
-	reset_rigidbody(p)
+	p.rb={}
+	reset_rigidbody(p.rb)
+	p.rb.oy=2
+	p.rb.h-=4
 
-	p.x=cur_map.player.x
-	p.y=cur_map.player.y
+	p.grb={}
+	reset_rigidbody(p.grb)
+	p.grb.ox=2
+	p.grb.w-=4
+
+	p.rb.x=cur_map.player.x
+	p.rb.y=cur_map.player.y-4
 
 	p.death_anim=0
 	p.flip=false
@@ -122,17 +132,27 @@ function draw_player(p)
 		return
 	end
 
-	local x=round(p.x)
-	local y=round(p.y)
+	local x=round(p.rb.x)
+	local y=round(p.rb.y)
 
 	local idx=1
-	--if p.vx~=0 and p.grounded then
+	--if p.vx~=0 and p.grb.grounded then
 	--	idx+=flr(time()*4)%4
 	--end
 
 	spr(player_anim[idx],x,y,1,1,p.flip)
 
 	print(lessa,0,0,8)
+
+	if debug_colliders!=nil then
+		draw_collider(p.rb,8)
+		draw_collider(p.grb,3)
+
+		for c in all(debug_colliders) do
+			draw_collider(c,11)
+		end
+		debug_colliders={}
+	end
 end
 
 lessa=""
@@ -142,45 +162,44 @@ function update_player(p)
 		return
 	end
 
-	p.vx=0
+	p.rb.vx=0
 	if btn(0) then
-		p.vx=-player_vel
+		p.rb.vx=-player_vel
 		p.flip=true
 	elseif btn(1) then
-		p.vx=player_vel
+		p.rb.vx=player_vel
 		p.flip=false
 	end
 
-	if btnp(5) or btnp(6) then
+	if btnp(5) or btnp(4) then
 		p.jump_timer=player_jump_time
 	end
 
 	if p.jump_timer>0 then
 		p.jump_timer-=1
-		if p.grounded then
+		if p.grb.grounded then
 			p.jump_timer=0
-			p.vy+=player_jump
-			p.grounded=false
+			p.rb.vy+=player_jump
+			p.grb.grounded=false
 		end
 	end
 
-	update_rigidbody(p,gravity)
-	local f,dx,dy=map_collide(p)
+	update_rigidbody(p.rb,gravity)
+	copy_rigidbody_state(p.rb,p.grb)
+
+	-- map collision
+	local f,dx,dy=map_collide(p.rb)
+	local gf,gdx,gdy=map_collide(p.grb)
 
 	if band(f,f_deadly)!=0 then
 		kill_player(p)
-	elseif p.y>128 then
+	elseif p.rb.y>128 then
 		kill_player(p)
 	elseif band(f,f_goal)!=0 then
 		next_map_timer=next_map_time
 	else
-		respond_collision(p,dx,dy)
-	end
-
-	if p.grounded then
-		lessa=">grounded"
-	else
-		lessa=">"
+		respond_collision(p.grb,gdx,gdy)
+		respond_collision(p.rb,dx,gdy)
 	end
 end
 
@@ -189,6 +208,8 @@ end
 function reset_rigidbody(rb)
 	rb.x=0
 	rb.y=0
+	rb.ox=0
+	rb.oy=0
 	rb.w=8
 	rb.h=8
 
@@ -200,6 +221,13 @@ function reset_rigidbody(rb)
 	return rb
 end
 
+function copy_rigidbody_state(a,b)
+	b.x=a.x
+	b.y=a.y
+	b.vx=a.vx
+	b.vy=a.vy
+end
+
 function update_rigidbody(rb,g)
 	rb.x+=rb.vx
 
@@ -209,9 +237,9 @@ function update_rigidbody(rb,g)
 	rb.y+=rb.vy
 end
 
-function draw_rigidbody(rb,c)
-	local x0=round(rb.x)
-	local y0=round(rb.y)
+function draw_collider(rb,c)
+	local x0=round(rb.x+rb.ox)
+	local y0=round(rb.y+rb.oy)
 	local x1=round(x0+rb.w-1)
 	local y1=round(y0+rb.h-1)
 	rect(x0,y0,x1,y1,c)
@@ -222,26 +250,18 @@ function check_collision(a,b)
 		return false,0,0
 	end
 
-	local ax0=a.x
+	local ax0=a.x+a.ox
 	local ax1=ax0+a.w
-	local ay0=a.y
+	local ay0=a.y+a.oy
 	local ay1=ay0+a.h
 
-	local bx0=b.x
+	local bx0=b.x+b.ox
 	local bx1=bx0+b.w
-	local by0=b.y
+	local by0=b.y+b.oy
 	local by1=by0+b.h
 
 	if ax0>=bx1 or bx0>=ax1 or ay0>=by1 or by0>=ay1 then
 		return false, 0, 0
-	end
-
-	local function abs_min(a,b)
-		if abs(a)<abs(b) then
-			return a
-		else
-			return b
-		end
 	end
 
 	local dx=abs_min(bx1-ax0,bx0-ax1)
@@ -268,9 +288,14 @@ function respond_collision(a,dx,dy)
 	if dy!=0 and sdy!=sgn(a.vy) then
 		a.vy=0
 
-		if sdy<0 then
+		if sdy<0 and dx==0 then
 			a.grounded=true
 		end
+	end
+
+	lessa=dx..","..dy..","
+	if a.grounded then
+		lessa=lessa.."ground"
 	end
 end
 
@@ -296,8 +321,10 @@ function map_collide(c)
 
 		local mc=map_colliders[m]
 		local t={
-			x=mx*8+mc[1],
-			y=my*8+mc[2],
+			x=mx*8,
+			y=my*8,
+			ox=mc[1],
+			oy=mc[2],
 			w=mc[3],
 			h=mc[4]
 		}
@@ -306,8 +333,12 @@ function map_collide(c)
 			local cr,dx,dy=check_collision(c,t)
 			if cr then
 				r.f=bor(r.f,f)
-				r.dx+=dx
-				r.dy+=dy
+				r.dx=abs_max(r.dx,dx)
+				r.dy=abs_max(r.dy,dy)
+
+				if debug_colliders!=nil then
+					add(debug_colliders,t)
+				end
 			end
 		end
 	end
@@ -472,6 +503,22 @@ end
 
 function round(x)
 	return flr(x+0.5)
+end
+
+function abs_min(a,b)
+	if abs(a)<abs(b) then
+		return a
+	else
+		return b
+	end
+end
+
+function abs_max(a,b)
+	if abs(a)>abs(b) then
+		return a
+	else
+		return b
+	end
 end
 
 function fade(fa)
