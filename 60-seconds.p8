@@ -5,6 +5,15 @@ __lua__
 
 ---------------- constants
 
+-- map
+initial_map=1
+map_count=1
+next_map_time=20
+
+-- camera shake
+shake_force=7
+shake_time=4
+
 -- physics
 gravity=0.3
 
@@ -28,21 +37,93 @@ player_death_anim_time=20
 player_anim_spd=4
 player_anim={1}
 
----------------- state
-
-local player={}
-
----------------- init
-
-function reset_player(p)
-	return p
-end
+---------------- default functions
 
 function _init()
+	player={}
+	maps={}
+	cur_map={}
+
+	shake_timer=0
+
+	level=0
+
 	reset_player(player)
 end
 
+function _draw()
+	cls()
+	draw_map(1)
+
+	draw_player(player)
+end
+
+function _update()
+	update_player(player)
+end
+
+---------------- init
+
+function reset_player(p,l)
+	return p
+end
+
 ---------------- draws
+
+function draw_player(p)
+end
+
+---------------- updates
+
+function update_player(p)
+end
+
+---------------- physics
+
+---------------- map
+
+function load_map(l)
+	fade(0)
+
+	if l>map_count then
+		level=0
+		return
+	end
+
+	level=l
+	cur_map=scan_map(l)
+
+	reset_player(player,l)
+end
+
+function scan_map(l)
+	local m=maps[l]
+	if m then
+		return m
+	end
+
+	m={
+		player={x=0,y=0},
+	}
+
+	local oi,oj=map_offset(l,0,0)
+
+	for i=0,16 do
+		for j=0,16 do
+			local x=oi+i
+			local y=oj+j
+			local mi=mget(x,y)
+
+			if mi==1 then -- player
+				mset(x,y,0)
+				m.player={x=i*8,y=j*8}
+			end
+		end
+	end
+
+	maps[l]=m
+	return m
+end
 
 function map_offset(l,i,j)
 	return i+l*16,j
@@ -53,19 +134,25 @@ function draw_map(l)
 	map(i,j,0,0,16,16)
 end
 
-function _draw()
-	cls()
-	draw_map(1)
+---------------- camera
+
+function begin_shake()
+	shake_timer=shake_time
 end
 
----------------- updates
+function update_shake()
+	if shake_timer==1 then
+		camera()
+	end
 
-function _update()
+	shake_timer-=1
+	if shake_timer>0 then
+		local f=shake_force
+		local x=rnd(f)-f/2
+		local y=rnd(f)-f/2
+		camera(flr(x),flr(y))
+	end
 end
-
----------------- physics
-
-
 
 ---------------- helpers
 
