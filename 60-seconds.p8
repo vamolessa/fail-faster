@@ -188,8 +188,9 @@ function update_player(p)
 	copy_rigidbody_state(p.rb,p.grb)
 
 	-- map collision
-	local f,dx,dy=map_collide(p.rb)
-	local gf,gdx,gdy=map_collide(p.grb)
+	local f,dx,dy=map_check_collision(p.rb,0.1,1)
+	local gf,gdx,gdy=map_check_collision(p.grb,1,0.1)
+	f=bor(f,gf)
 
 	if band(f,f_deadly)!=0 then
 		kill_player(p)
@@ -198,8 +199,17 @@ function update_player(p)
 	elseif band(f,f_goal)!=0 then
 		next_map_timer=next_map_time
 	else
-		respond_collision(p.grb,gdx,gdy)
-		respond_collision(p.rb,dx,gdy)
+		respond_collision(p.rb,dx,0)
+		respond_collision(p.grb,0,gdy)
+		p.rb.y=p.grb.y
+		p.rb.vy=p.grb.vy
+
+		lessa=dx..","..gdy..","
+		if p.grb.grounded then
+			lessa=lessa.."ground"
+		end
+
+		copy_rigidbody_state(p.rb,p.grb)
 	end
 end
 
@@ -245,10 +255,13 @@ function draw_collider(rb,c)
 	rect(x0,y0,x1,y1,c)
 end
 
-function check_collision(a,b)
+function check_collision(a,b,sx,sy)
 	if a==b then
 		return false,0,0
 	end
+
+	local dvx=b.vx-a.vx
+	local dvy=b.vy-a.vy
 
 	local ax0=a.x+a.ox
 	local ax1=ax0+a.w
@@ -267,7 +280,7 @@ function check_collision(a,b)
 	local dx=abs_min(bx1-ax0,bx0-ax1)
 	local dy=abs_min(by1-ay0,by0-ay1)
 
-	if abs(dx)<=abs(dy) then
+	if sx*abs(dx)<=sy*abs(dy) then
 		dy=0
 	else
 		dx=0
@@ -292,14 +305,9 @@ function respond_collision(a,dx,dy)
 			a.grounded=true
 		end
 	end
-
-	lessa=dx..","..dy..","
-	if a.grounded then
-		lessa=lessa.."ground"
-	end
 end
 
-function map_collide(c)
+function map_check_collision(c,sx,sy)
 	local function try_col(r,c,mx,my)
 		local i,j=map_offset(level,mx,my)
 
@@ -326,11 +334,13 @@ function map_collide(c)
 			ox=mc[1],
 			oy=mc[2],
 			w=mc[3],
-			h=mc[4]
+			h=mc[4],
+			vx=0,
+			vy=0
 		}
 
 		if band(f,f_solid)!=0x0 then
-			local cr,dx,dy=check_collision(c,t)
+			local cr,dx,dy=check_collision(c,t,sx,sy)
 			if cr then
 				r.f=bor(r.f,f)
 				r.dx=abs_max(r.dx,dx)
