@@ -3,12 +3,43 @@ version 16
 __lua__
 -- a game for fc jam 2018
 
----------------- data
+---------------- constants
 
+-- physics
+gravity=0.3
+
+f_solid=0x1
+f_deadly=0x2
+f_goal=0x4
+
+c_mask=0x0
+c_mask=bor(c_mask,f_solid)
+c_mask=bor(c_mask,f_deadly)
+c_mask=bor(c_mask,f_goal)
+
+-- player
+min_vel_y=-3.3
+
+player_vel=1.5
+player_jump=-4
+player_jump_time=4
+
+player_death_anim_time=20
+player_anim_spd=4
+player_anim={1}
+
+---------------- state
+
+local player={}
 
 ---------------- init
 
+function reset_player(p)
+	return p
+end
+
 function _init()
+	reset_player(player)
 end
 
 ---------------- draws
@@ -30,6 +61,16 @@ end
 ---------------- updates
 
 function _update()
+end
+
+---------------- physics
+
+
+
+---------------- helpers
+
+function round(x)
+	return flr(x+0.5)
 end
 
 function fade(fa)
