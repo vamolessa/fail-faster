@@ -26,6 +26,10 @@ c_mask=bor(c_mask,f_solid)
 c_mask=bor(c_mask,f_deadly)
 c_mask=bor(c_mask,f_goal)
 
+map_colliders={}
+map_colliders.__index=function() return {0,0,8,8} end
+setmetatable(map_colliders,map_colliders)
+
 -- player
 min_vel_y=-3.3
 
@@ -79,6 +83,104 @@ function update_player(p)
 end
 
 ---------------- physics
+
+function reset_rigidbody(rb)
+	rb.x=0
+	rb.y=0
+	rb.w=8
+	rb.h=8
+
+	rb.vx=0
+	rb.vy=0
+
+	rb.grounded=false
+
+	return rb
+end
+
+function update_rigidbody(rb)
+	rb.x+=rb.vx
+
+	rb.vy+=g
+	rb.vy=max(rb.vy,min_vel_y)
+
+	rb.y+=rb.vy
+end
+
+function draw_rigidbody(rb,c)
+	local x0=round(rb.x)
+	local y0=round(rb.y)
+	local x1=round(x0+rb.w-1)
+	local y1=round(y0+rb.h-1)
+	rect(x0,y0,x1,y1,c)
+end
+
+function collide(a,b)
+	if a==b then
+		return false,0,0
+	end
+
+	return false,0,0
+end
+
+function map_collide(c)
+	local function try_col(c,mx,my)
+		local i,j=map_offset(level,mx,my)
+
+		local m=mget(i,j)
+		local f=fget(m)
+		local solid=band(f,c_mask)!=0x0
+
+		if mx<0 or mx>15 then
+			solid=true
+			f=f_solid
+			m=-1
+		elseif my<0 or my>15 then
+			solid=false
+		end
+
+		if not solid then
+			return 0x0,0,0
+		end
+
+		local mc=map_colliders[m]
+		local t={}
+		t.x=mx*8+mc[1]
+		t.y=my*8+mc[2]
+		t.w=mc[3]
+		t.h=mc[4]
+
+		if band(f,f_solid)==0 then
+			local r,rx,ry=collide(c,t)
+			if r then
+				return f,rx,ry
+			end
+		end
+
+		return 0x0,0,0
+	end
+
+	local mx=flr(c.x/8)
+	local my=flr(c.y/8)
+
+	local rx=0
+	local ry=0
+	local f=0x0
+
+	local function col(mx,my)
+		local rf,x,y=try_col(c,mx,my)
+		f=bor(f,rf)
+		rx+=x
+		ry+=y
+	end
+
+	col(mx,my)
+	col(c,mx+1,my)
+	col(c,mx,my+1)
+	col(c,mx+1,my+1)
+
+	return f,rx,ry
+end
 
 ---------------- map
 
