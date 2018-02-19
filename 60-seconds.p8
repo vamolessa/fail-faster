@@ -60,7 +60,7 @@ function _init()
 end
 
 function _draw()
-	cls()
+	cls(12)
 
 	if level==0 then
 		draw_title()
@@ -103,7 +103,7 @@ function reset_player(p,l)
 	reset_rigidbody(p)
 
 	p.x=cur_map.player.x
-	p.y=cur_map.player.x
+	p.y=cur_map.player.y
 
 	p.death_anim=0
 	p.flip=false
@@ -131,7 +131,11 @@ function draw_player(p)
 	--end
 
 	spr(player_anim[idx],x,y,1,1,p.flip)
+
+	print(lessa,0,0,8)
 end
+
+lessa=""
 
 function update_player(p)
 	if p.death_anim>0 then
@@ -147,7 +151,7 @@ function update_player(p)
 		p.flip=false
 	end
 
-	if btnp(5) then
+	if btnp(5) or btnp(6) then
 		p.jump_timer=player_jump_time
 	end
 
@@ -160,7 +164,7 @@ function update_player(p)
 		end
 	end
 
-	update_rigidbody(p,0)
+	update_rigidbody(p,gravity)
 	local f,dx,dy=map_collide(p)
 
 	if band(f,f_deadly)!=0 then
@@ -171,6 +175,12 @@ function update_player(p)
 		next_map_timer=next_map_time
 	else
 		respond_collision(p,dx,dy)
+	end
+
+	if p.grounded then
+		lessa=">grounded"
+	else
+		lessa=">"
 	end
 end
 
@@ -265,7 +275,7 @@ function respond_collision(a,dx,dy)
 end
 
 function map_collide(c)
-	local function try_col(c,mx,my)
+	local function try_col(r,c,mx,my)
 		local i,j=map_offset(level,mx,my)
 
 		local m=mget(i,j)
@@ -281,24 +291,25 @@ function map_collide(c)
 		end
 
 		if not solid then
-			return 0x0,0,0
+			return
 		end
 
 		local mc=map_colliders[m]
-		local t={}
-		t.x=mx*8+mc[1]
-		t.y=my*8+mc[2]
-		t.w=mc[3]
-		t.h=mc[4]
+		local t={
+			x=mx*8+mc[1],
+			y=my*8+mc[2],
+			w=mc[3],
+			h=mc[4]
+		}
 
-		if band(f,f_solid)==0 then
-			local r,rx,ry=check_collision(c,t)
-			if r then
-				return f,rx,ry
+		if band(f,f_solid)!=0x0 then
+			local cr,dx,dy=check_collision(c,t)
+			if cr then
+				r.f=bor(r.f,f)
+				r.dx+=dx
+				r.dy+=dy
 			end
 		end
-
-		return 0x0,0,0
 	end
 
 	local mx=flr(c.x/8)
@@ -310,17 +321,10 @@ function map_collide(c)
 		f=0x0
 	}
 
-	local function acc_col(r,c,mx,my)
-		local f,dx,dy=try_col(c,mx,my)
-		r.f=bor(r.f,f)
-		r.dx+=dx
-		r.dy+=dy
-	end
-
-	acc_col(r,c,mx,my)
-	acc_col(r,c,mx+1,my)
-	acc_col(r,c,mx,my+1)
-	acc_col(r,c,mx+1,my+1)
+	try_col(r,c,mx,my)
+	try_col(r,c,mx+1,my)
+	try_col(r,c,mx,my+1)
+	try_col(r,c,mx+1,my+1)
 
 	return r.f,r.dx,r.dy
 end
@@ -427,8 +431,6 @@ function scan_map(l)
 			if mi==1 then -- player
 				mset(x,y,0)
 				m.player={x=i*8,y=j*8}
-				print("player "..(x)..","..(y))
-				--_draw=function() end
 			end
 		end
 	end
