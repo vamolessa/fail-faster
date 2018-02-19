@@ -30,6 +30,9 @@ map_colliders={}
 map_colliders.__index=function() return {0,0,8,8} end
 setmetatable(map_colliders,map_colliders)
 
+-- particles
+test_ppal={7,9,10}
+
 -- player
 min_vel_y=-3.3
 
@@ -48,27 +51,64 @@ function _init()
 	maps={}
 	cur_map={}
 
+	next_map_timer=0
 	shake_timer=0
 
 	level=0
 
-	reset_player(player)
+	load_map(1)
 end
 
 function _draw()
 	cls()
-	draw_map(1)
 
+	if level==0 then
+		draw_title()
+		return
+	end
+
+	update_shake()
+
+	draw_map(1)
 	draw_player(player)
+
+	if next_map_timer>0 then
+		local t=next_map_time-next_map_timer
+		local f=min(t,fade_time)/fade_time
+		fade(f)
+	end
 end
 
 function _update()
-	update_player(player)
+	if level==0 then
+		update_title()
+		return
+	end
+
+	if next_map_timer>0 then
+		next_map_timer-=1
+		if next_map_timer==0 then
+			load_map(level+1)
+		end
+
+		return
+	end
+
+	update_player(player,level)
 end
 
 ---------------- init
 
 function reset_player(p,l)
+	reset_rigidbody(p)
+
+	p.x=cur_map.player[1]
+	p.y=cur_map.player[2]
+
+	p.death_anim=0
+	p.flip=false
+	p.jump_timer=0
+
 	return p
 end
 
@@ -80,6 +120,44 @@ end
 ---------------- updates
 
 function update_player(p)
+	if p.death_anim>0 then
+		return
+	end
+
+	p.vx=0
+	if btn(0) then
+		p.vx=-player_vel
+		p.flip=true
+	elseif btn(1) then
+		p.vx=player_vel
+		p.flip=false
+	end
+
+	if btnp(5) then
+		p.jump_timer=player_jump_time
+	end
+
+	if p.jump_timer>0 then
+		p.jump_timer-=1
+		if p.grounded then
+			p.jump_timer=0
+			p.vy+=player_jump
+			p.grounded=false
+		end
+	end
+
+	update_rigidbody(p)
+	local f,dx,dy=map_collide(p)
+
+	if band(f,f_deadly)!=0 then
+		kill_player(p)
+	elseif p.y>128 then
+		kill_player(p)
+	elseif band(f,f_goal)!=0 then
+		next_map_timer=next_map_time
+	else
+		respond_collision(p,dx,dy)
+	end
 end
 
 ---------------- physics
@@ -115,12 +193,61 @@ function draw_rigidbody(rb,c)
 	rect(x0,y0,x1,y1,c)
 end
 
-function collide(a,b)
+function check_collision(a,b)
 	if a==b then
 		return false,0,0
 	end
 
-	return false,0,0
+	local ax0=a.x
+	local ax1=ax0+a.w
+	local ay0=a.y
+	local ay1=ay0+a.h
+
+	local bx0=b.x
+	local bx1=bx0+b.w
+	local by0=b.y
+	local by1=by0+b.h
+
+	if ax0>=bx1 or bx0>=ax1 or ay0>=by1 or by0>=ay1 then
+		return false, 0, 0
+	end
+
+	local function abs_min(a,b)
+		if abs(a)<abs(b) then
+			return a
+		else
+			return b
+		end
+	end
+
+	local dx=abs_min(bx1-ax0,bx0-ax1)
+	local dy=abs_min(by1-ay0,by0-ay1)
+
+	if abs(dx)<=abs(dy) then
+		dy=0
+	else
+		dx=0
+	end
+
+	return true, dx, dy
+end
+
+function respond_collision(a,dx,dy)
+	a.x+=dx
+	a.y+=dy
+
+	if dx!=0 and sgn(dx)!=sgn(a.vx) then
+		a.vx=0
+	end
+
+	local sdy=sgn(dy)
+	if dy!=0 and sdy!=sgn(a.vy) then
+		a.vy=0
+
+		if sdy<0 then
+			a.grounded=true
+		end
+	end
 end
 
 function map_collide(c)
@@ -151,7 +278,7 @@ function map_collide(c)
 		t.h=mc[4]
 
 		if band(f,f_solid)==0 then
-			local r,rx,ry=collide(c,t)
+			local r,rx,ry=check_collision(c,t)
 			if r then
 				return f,rx,ry
 			end
@@ -180,6 +307,71 @@ function map_collide(c)
 	col(c,mx+1,my+1)
 
 	return f,rx,ry
+end
+
+---------------- particles
+
+function new_particle_burst(x,y,c,p)
+	local vmx=particle_force.x
+	local vmy=particle_force.y
+
+	for i=1,c do
+		local p={
+			time=particle_time,
+			x=x+4,
+			y=y+4,
+			vx=rnd(vmx)-vmx/2,
+			vy=-rnd(vmy/2)-vmy/2,
+			g=particle_gravity,
+			c=p[round(rnd(#p-1))+1]
+		}
+
+		update_particle(p)
+		add(particles,p)
+	end
+end
+
+function new_particle_goal(x,y,c,p)
+	local vmy=particle_force.y
+
+	for i=1,c do
+		local p={
+			time=particle_time,
+			x=x+flr(rnd(8)),
+			y=y+8,
+			vx=0,
+			vy=rnd(vmy/2)-vmy/2,
+			g=0,
+			c=p[round(rnd(#p-1))+1]
+		}
+
+		add(particles,p)
+	end
+end
+
+function update_particle(p)
+	p.vy+=p.g
+	p.vy=max(p.vy,min_vel_y)
+
+	p.x+=p.vx
+	p.y+=p.vy
+
+	p.time-=1
+	if p.time<0 then
+		del(particles,p)
+	end
+end
+
+function update_particles()
+	for p in all(particles) do
+		update_particle(p)
+	end
+end
+
+function draw_particles()
+	for p in all(particles) do
+		pset(p.x,p.y,p.c)
+	end
 end
 
 ---------------- map
