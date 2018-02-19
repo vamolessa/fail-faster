@@ -102,18 +102,10 @@ end
 ---------------- player
 
 function reset_player(p,l)
-	p.rb={}
-	reset_rigidbody(p.rb)
-	p.rb.oy=2
-	p.rb.h-=4
+	reset_rigidbody(p)
 
-	p.grb={}
-	reset_rigidbody(p.grb)
-	p.grb.ox=2
-	p.grb.w-=4
-
-	p.rb.x=cur_map.player.x
-	p.rb.y=cur_map.player.y-4
+	p.x=cur_map.player.x
+	p.y=cur_map.player.y-4
 
 	p.death_anim=0
 	p.flip=false
@@ -132,11 +124,11 @@ function draw_player(p)
 		return
 	end
 
-	local x=round(p.rb.x)
-	local y=round(p.rb.y)
+	local x=round(p.x)
+	local y=round(p.y)
 
 	local idx=1
-	--if p.vx~=0 and p.grb.grounded then
+	--if p.vx~=0 and p.grounded then
 	--	idx+=flr(time()*4)%4
 	--end
 
@@ -145,8 +137,7 @@ function draw_player(p)
 	print(lessa,0,0,8)
 
 	if debug_colliders!=nil then
-		draw_collider(p.rb,8)
-		draw_collider(p.grb,3)
+		draw_collider(p,8)
 
 		for c in all(debug_colliders) do
 			draw_collider(c,11)
@@ -162,12 +153,12 @@ function update_player(p)
 		return
 	end
 
-	p.rb.vx=0
+	p.vx=0
 	if btn(0) then
-		p.rb.vx=-player_vel
+		p.vx=-player_vel
 		p.flip=true
 	elseif btn(1) then
-		p.rb.vx=player_vel
+		p.vx=player_vel
 		p.flip=false
 	end
 
@@ -177,39 +168,31 @@ function update_player(p)
 
 	if p.jump_timer>0 then
 		p.jump_timer-=1
-		if p.grb.grounded then
+		if p.grounded then
 			p.jump_timer=0
-			p.rb.vy+=player_jump
-			p.grb.grounded=false
+			p.vy+=player_jump
+			p.grounded=false
 		end
 	end
 
-	update_rigidbody(p.rb,gravity)
-	copy_rigidbody_state(p.rb,p.grb)
+	update_rigidbody(p,gravity)
 
 	-- map collision
-	local f,dx,dy=map_check_collision(p.rb,1,1)
-	local gf,gdx,gdy=map_check_collision(p.grb,1,0)
-	f=bor(f,gf)
+	local f,dx,dy=map_check_collision(p,1,1)
 
 	if band(f,f_deadly)!=0 then
 		kill_player(p)
-	elseif p.rb.y>128 then
+	elseif p.y>128 then
 		kill_player(p)
 	elseif band(f,f_goal)!=0 then
 		next_map_timer=next_map_time
 	else
-		respond_collision(p.rb,dx,gdy)
-		respond_collision(p.grb,gdx,gdy)
-		p.rb.y=p.grb.y
-		p.rb.vy=p.grb.vy
+		respond_collision(p,dx,dy)
 
-		lessa=dx..","..gdy..","
-		if p.grb.grounded then
+		lessa=dx..","..dy..","
+		if p.grounded then
 			lessa=lessa.."ground"
 		end
-
-		copy_rigidbody_state(p.rb,p.grb)
 	end
 end
 
@@ -255,7 +238,7 @@ function draw_collider(rb,c)
 	rect(x0,y0,x1,y1,c)
 end
 
-function check_collision(a,b,sx,sy)
+function check_collision_raw(a,b)
 	if a==b then
 		return false,0,0
 	end
@@ -274,16 +257,22 @@ function check_collision(a,b,sx,sy)
 	local by1=by0+b.h
 
 	if ax0>=bx1 or bx0>=ax1 or ay0>=by1 or by0>=ay1 then
-		return false, 0, 0
+		return false,0,0
 	end
 
 	local dx=abs_min(bx1-ax0,bx0-ax1)
 	local dy=abs_min(by1-ay0,by0-ay1)
 
-	if sx*abs(dx)<=sy*abs(dy) then
-		dy=sgn(dy)*dvy*abs(dx)/dvx
+	return true,dx,dy
+end
+
+function check_collision(a,b)
+	local r,dx,dy=check_collision_raw(a,b)
+
+	if abs(dx)<=abs(dy) then
+		dy=0
 	else
-		dx=sgn(dx)*dvx*abs(dy)/dvy
+		dx=0
 	end
 
 	return true, dx, dy
