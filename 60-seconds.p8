@@ -260,8 +260,8 @@ function check_collision_raw(a,b)
 		return false,0,0
 	end
 
-	local dx=abs_min(bx1-ax0,bx0-ax1)
-	local dy=abs_min(by1-ay0,by0-ay1)
+	local dx=min_abs(bx1-ax0,bx0-ax1)
+	local dy=min_abs(by1-ay0,by0-ay1)
 
 	return true,dx,dy
 end
@@ -269,10 +269,10 @@ end
 function check_collision(a,b)
 	local r,dx,dy=check_collision_raw(a,b)
 
-	if abs(dx)<=abs(dy) then
-		dy=0
-	else
+	if abs(dy)<abs(dx) then
 		dx=0
+	else
+		dy=0
 	end
 
 	return true, dx, dy
@@ -297,7 +297,7 @@ function respond_collision(a,dx,dy)
 end
 
 function map_check_collision(c,sx,sy)
-	local function try_col(r,c,mx,my)
+	local function try_col(r,c,mx,my,mm)
 		local i,j=map_offset(level,mx,my)
 
 		local m=mget(i,j)
@@ -329,11 +329,12 @@ function map_check_collision(c,sx,sy)
 		}
 
 		if band(f,f_solid)!=0x0 then
-			local cr,dx,dy=check_collision(c,t,sx,sy)
+			local cr,dx,dy=check_collision_raw(c,t,sx,sy)
 			if cr then
+				r.m=bor(r.m,mm)
 				r.f=bor(r.f,f)
-				r.dx=abs_max(r.dx,dx)
-				r.dy=abs_max(r.dy,dy)
+
+				add(r.c,{x=dx,y=dy})
 
 				if debug_colliders!=nil then
 					add(debug_colliders,t)
@@ -346,17 +347,68 @@ function map_check_collision(c,sx,sy)
 	local my=flr(c.y/8)
 
 	local r={
-		dx=0,
-		dy=0,
-		f=0x0
+		f=0x0,
+		m=0x0,
+		c={},
 	}
 
-	try_col(r,c,mx,my)
-	try_col(r,c,mx+1,my)
-	try_col(r,c,mx,my+1)
-	try_col(r,c,mx+1,my+1)
+	try_col(r,c,mx,my,0x1)
+	try_col(r,c,mx+1,my,0x2)
+	try_col(r,c,mx,my+1,0x4)
+	try_col(r,c,mx+1,my+1,0x8)
 
-	return r.f,r.dx,r.dy
+	local d1=bor(0x1,0x8)
+	local d2=bor(0x2,0x4)
+
+	local dx=0
+	local dy=0
+
+	if #r.c<3 and r.m!=d1 and r.m!=d2 then
+		local sx=0
+		local sy=0
+
+		for c in all(r.c) do
+			if sx==0 then
+				sx=c.x
+			elseif fsgn(c.x)!=sgn(sx) then
+				c.x=0
+			else
+				sx=max_abs(sx,c.x)
+			end
+
+			if sy==0 then
+				sy=c.y
+			elseif fsgn(c.y)!=sgn(sy) then
+				c.y=0
+			else
+				sy=max_abs(sy,c.y)
+			end
+		end
+
+		for c in all(r.c) do
+			dx=max_abs(dx,c.x)
+			dy=max_abs(dy,c.y)
+		end
+
+		if abs(dy)<abs(dx) then
+			dx=0
+		else
+			dy=0
+		end
+	else
+		for c in all(r.c) do
+			if abs(c.y)<abs(c.x) then
+				c.x=0
+			else
+				c.y=0
+			end
+
+			dx=max_abs(dx,c.x)
+			dy=max_abs(dy,c.y)
+		end
+	end
+
+	return r.f,dx,dy
 end
 
 ---------------- particles
@@ -504,7 +556,15 @@ function round(x)
 	return flr(x+0.5)
 end
 
-function abs_min(a,b)
+function fsgn(x)
+	if x==0 then
+		return 0
+	else
+		return sgn(x)
+	end
+end
+
+function min_abs(a,b)
 	if abs(a)<abs(b) then
 		return a
 	else
@@ -512,7 +572,7 @@ function abs_min(a,b)
 	end
 end
 
-function abs_max(a,b)
+function max_abs(a,b)
 	if abs(a)>abs(b) then
 		return a
 	else
