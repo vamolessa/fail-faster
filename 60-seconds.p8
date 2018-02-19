@@ -188,8 +188,8 @@ function update_player(p)
 	copy_rigidbody_state(p.rb,p.grb)
 
 	-- map collision
-	local f,dx,dy=map_check_collision(p.rb,0.1,1)
-	local gf,gdx,gdy=map_check_collision(p.grb,1,0.1)
+	local f,dx,dy=map_check_collision(p.rb,1,1)
+	local gf,gdx,gdy=map_check_collision(p.grb,1,0)
 	f=bor(f,gf)
 
 	if band(f,f_deadly)!=0 then
@@ -199,8 +199,8 @@ function update_player(p)
 	elseif band(f,f_goal)!=0 then
 		next_map_timer=next_map_time
 	else
-		respond_collision(p.rb,dx,0)
-		respond_collision(p.grb,0,gdy)
+		respond_collision(p.rb,dx,gdy)
+		respond_collision(p.grb,gdx,gdy)
 		p.rb.y=p.grb.y
 		p.rb.vy=p.grb.vy
 
@@ -281,9 +281,9 @@ function check_collision(a,b,sx,sy)
 	local dy=abs_min(by1-ay0,by0-ay1)
 
 	if sx*abs(dx)<=sy*abs(dy) then
-		dy=0
+		dy=sgn(dy)*dvy*abs(dx)/dvx
 	else
-		dx=0
+		dx=sgn(dx)*dvx*abs(dy)/dvy
 	end
 
 	return true, dx, dy
